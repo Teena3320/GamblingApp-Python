@@ -1,28 +1,28 @@
-# from services.eligibility_service import EligibilityService
-
-# def main():
-#     eligible, reason = EligibilityService.is_eligible_to_bet(
-#         gambler_id=1,
-#         requested_bet_amount=100
-#     )
-
-#     print("Eligible:", eligible)
-#     print("Reason:", reason)
-
-# if __name__ == "__main__":
-#     main()
 # from config.database import engine
 # from models import Base
+# from services.betting_session_service import BettingSessionService
 
 # if __name__ == "__main__":
 #     Base.metadata.create_all(bind=engine)
-#     print("✅ Tables created")
 
-from services.bet_amount_service import BetAmountService
+#     result = BettingSessionService.run_session(gambler_id=1)
+#     print(result)
+
+from config.database import engine
+from models import Base
+from services.betting_session_service import BettingSessionService
+
 
 def main():
-    amount = BetAmountService.calculate_bet_amount(gambler_id=1)
-    print("Calculated bet amount:", amount)
+    # Ensure all tables exist (safe to run multiple times)
+    Base.metadata.create_all(bind=engine)
+
+    # Run UC4 betting session
+    result = BettingSessionService.run_session(gambler_id=1)
+
+    print("UC4 Result:")
+    print(result)
+
 
 if __name__ == "__main__":
     main()
