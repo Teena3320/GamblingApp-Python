@@ -2,6 +2,6 @@ from enum import Enum
 
 class BettingStrategyType(Enum):
     FIXED = "FIXED"
+    PERCENTAGE = "PERCENTAGE"
     MARTINGALE = "MARTINGALE"
-    ANTI_MARTINGALE = "ANTI_MARTINGALE"
-    RANDOM = "RANDOM"
+    REVERSE_MARTINGALE = "REVERSE_MARTINGALE"

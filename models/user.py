@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float
+from sqlalchemy import Column, Integer, String, Boolean, Numeric
 from models import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -11,8 +12,8 @@ class User(Base):
     email = Column(String(255))
     is_active = Column(Boolean, default=True)
 
-    initial_stake = Column(Float, nullable=False)
-    current_stake = Column(Float, nullable=False)
-    win_threshold = Column(Float, nullable=False)
-    loss_threshold = Column(Float, nullable=False)
-    min_required_stake = Column(Float, nullable=False)
+    initial_stake = Column(Numeric(15, 4), nullable=False)
+    current_stake = Column(Numeric(15, 4), nullable=False)
+    win_threshold = Column(Numeric(15, 4), nullable=False)
+    loss_threshold = Column(Numeric(15, 4), nullable=False)
+    min_required_stake = Column(Numeric(15, 4), nullable=False)

@@ -1,6 +1,8 @@
+from decimal import Decimal
 from config.database import SessionLocal
-from models.user import User
 from models.bet import Bet
+from models.user import User
+
 
 class BetSettlementService:
 
@@ -13,23 +15,29 @@ class BetSettlementService:
             db.close()
             raise ValueError("Bet not found")
 
-        if bet.status != "OPEN":
-            db.close()
-            raise ValueError("Bet already settled")
-
         user = db.query(User).filter(User.user_id == bet.user_id).first()
+        if not user:
+            db.close()
+            raise ValueError("User not found")
+
+        outcome = outcome.upper() 
+
+        amount = Decimal(str(bet.amount))
+        current_stake = Decimal(str(user.current_stake))
 
         if outcome == "WIN":
-            winnings = bet.amount * 2
-            user.current_stake += winnings
-            bet.payout = winnings
+            payout = amount * Decimal("2")
+            user.current_stake = current_stake + payout
             bet.status = "WON"
-        elif outcome == "LOSE":
-            bet.payout = 0
+            bet.payout = payout
+
+        elif outcome == "LOSS":
             bet.status = "LOST"
+            bet.payout = Decimal("0.00")
+
         else:
             db.close()
-            raise ValueError("Invalid outcome")
+            raise ValueError(f"Invalid outcome: {outcome}")
 
         db.commit()
         db.close()

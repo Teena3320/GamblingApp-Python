@@ -1,22 +1,21 @@
-
 import random
-from domain.transaction_type import TransactionType
+from domain.betting.enums import BetOutcome
 
 
 class OutcomeService:
     """
-    Determines the outcome of a bet using probability.
-    Pure domain logic. No DB access.
+    Determines bet outcome using probability.
+    Domain-level logic.
     """
 
     @staticmethod
-    def determine_outcome(win_probability: float):
-        if win_probability < 0 or win_probability > 1:
+    def determine_outcome(win_probability: float) -> BetOutcome:
+        if not 0 <= win_probability <= 1:
             raise ValueError("Win probability must be between 0 and 1")
 
-        roll = random.random()  # value between 0.0 and 1.0
+        roll = random.random()
 
         if roll <= win_probability:
-            return TransactionType.BET_WIN
+            return BetOutcome.WIN
         else:
-            return TransactionType.BET_LOSS
+            return BetOutcome.LOSS

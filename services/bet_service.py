@@ -1,11 +1,14 @@
+
+from decimal import Decimal
 from config.database import SessionLocal
 from models.user import User
 from models.bet import Bet
 
+
 class BetService:
 
     @staticmethod
-    def place_bet(username: str, amount: int):
+    def place_bet(username: str, amount):
         db = SessionLocal()
 
         user = db.query(User).filter(User.username == username).first()
@@ -17,26 +20,26 @@ class BetService:
             db.close()
             raise ValueError("User is inactive")
 
-        if user.current_stake < amount:
+        amount = Decimal(str(amount))
+        current_stake = Decimal(str(user.current_stake))
+
+        if current_stake < amount:
             db.close()
             raise ValueError("Insufficient balance")
 
-        user.current_stake -= amount
+        user.current_stake = current_stake - amount
 
         bet = Bet(
             user_id=user.user_id,
-            amount=amount
+            amount=amount,
+            status="OPEN"
         )
 
         db.add(bet)
-
-        if user.current_stake <= user.loss_threshold:
-            user.is_active = False
-
-        if user.current_stake >= user.win_threshold:
-            user.is_active = False
-
         db.commit()
+        db.refresh(bet)          
+
+        bet_id = bet.bet_id       
         db.close()
 
-        return bet
+        return bet_id             

@@ -67,12 +67,12 @@ class BettingSessionService:
 
             bet_amount = BetAmountService.calculate_bet_amount(gambler_id)
 
-            bet = BetService.place_bet(user.username, bet_amount)
+            bet_id = BetService.place_bet(user.username, bet_amount)
 
             outcome = OutcomeService.determine_outcome(win_probability=0.5)
 
             BetSettlementService.resolve_bet(
-                bet_id=bet.bet_id,
+                bet_id=bet_id,
                 outcome=outcome.value,
             )
 
