@@ -7,3 +7,4 @@ from models.bet import Bet
 from models.stake_transaction import StakeTransaction
 from models.betting_preferences import BettingPreferences
 from models.betting_session import BettingSession  
+from models.alert import Alert
