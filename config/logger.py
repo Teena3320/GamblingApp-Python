@@ -6,4 +6,4 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-logger = logging.getLogger("gambling_app")
+logger = logging.getLogger("gambling_db")

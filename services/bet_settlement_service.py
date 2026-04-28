@@ -1,43 +1,48 @@
 from decimal import Decimal
-from config.database import SessionLocal
-from models.bet import Bet
-from models.user import User
+
+from repositories.user_repositories import UserRepository
+from repositories.bet_repository import BetRepository
+from repositories.stake_transaction_repository import StakeTransactionRepository
+from domain.transaction_type import TransactionType
 
 
 class BetSettlementService:
 
     @staticmethod
-    def resolve_bet(bet_id: int, outcome: str):
-        db = SessionLocal()
+    def resolve_bet(bet_id, outcome):
+        bet = BetRepository.get_by_id(bet_id)
 
-        bet = db.query(Bet).filter(Bet.bet_id == bet_id).first()
         if not bet:
-            db.close()
             raise ValueError("Bet not found")
 
-        user = db.query(User).filter(User.user_id == bet.user_id).first()
-        if not user:
-            db.close()
-            raise ValueError("User not found")
+        user = UserRepository.get_by_id(bet["user_id"])
 
-        outcome = outcome.upper() 
-
-        amount = Decimal(str(bet.amount))
-        current_stake = Decimal(str(user.current_stake))
+        amount = Decimal(str(bet["amount"]))
+        current_stake = Decimal(str(user["current_stake"]))
 
         if outcome == "WIN":
-            payout = amount * Decimal("2")
-            user.current_stake = current_stake + payout
-            bet.status = "WON"
-            bet.payout = payout
+            payout = amount * 2
+            new_stake = current_stake + payout
 
-        elif outcome == "LOSS":
-            bet.status = "LOST"
-            bet.payout = Decimal("0.00")
-
+            UserRepository.update_stake(user["user_id"], new_stake)
+            BetRepository.update_status(bet_id, "WON", payout)
+            StakeTransactionRepository.create(
+                gambler_id=user["user_id"],
+                transaction_type=TransactionType.BET_WIN.value,
+                amount=payout,
+                balance_before=current_stake,
+                balance_after=new_stake,
+                reference_id=bet_id,
+                description="Bet won payout"
+            )
         else:
-            db.close()
-            raise ValueError(f"Invalid outcome: {outcome}")
-
-        db.commit()
-        db.close()
+            BetRepository.update_status(bet_id, "LOST", 0)
+            StakeTransactionRepository.create(
+                gambler_id=user["user_id"],
+                transaction_type=TransactionType.BET_LOSS.value,
+                amount=Decimal("0"),
+                balance_before=current_stake,
+                balance_after=current_stake,
+                reference_id=bet_id,
+                description="Bet lost"
+            )

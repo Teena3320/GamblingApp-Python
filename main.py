@@ -1,185 +1,169 @@
 from decimal import Decimal
 
-from config.database import engine, SessionLocal
-from models import Base
-from models.user import User
-from models.betting_preferences import BettingPreferences
-
+from services.user_service import UserService
+from services.preference_service import PreferenceService
+from services.session_runner import SessionRunner
 from services.bet_service import BetService
 from services.bet_settlement_service import BetSettlementService
 from services.bet_amount_service import BetAmountService
 from services.eligibility_service import EligibilityService
-from services.betting_session_service import BettingSessionService
 
+from config.database import initialize_database
 from domain.outcome_service import OutcomeService
+from repositories.user_repositories import UserRepository
 
-def enable_autoplay(gambler_id):
-    db = SessionLocal()
-    prefs = db.query(BettingPreferences).filter(
-        BettingPreferences.gambler_id == gambler_id
-    ).first()
 
-    prefs.auto_play_enabled = True
-    db.commit()
-    db.close()
-
-    print(" Autoplay enabled")
-
-def register_user():
-    db = SessionLocal()
-
+def register():
     username = input("Enter username: ")
+    fullname = input("Enter full name: ")
     email = input("Enter email: ")
     stake = Decimal(input("Initial stake: "))
+    win_threshold = Decimal(input("Win threshold: "))
+    loss_threshold = Decimal(input("Loss threshold: "))
 
-    user = User(
-        username=username,
-        email=email,
-        initial_stake=stake,
-        current_stake=stake,
-        win_threshold=stake * 2,
-        loss_threshold=stake / 2,
-        min_required_stake=Decimal("10"),
-        is_active=True,
-    )
+    user_id = UserService.register(username, fullname, email, stake, win_threshold, loss_threshold)
+    PreferenceService.create_default(user_id)
 
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    gambler_id = user.user_id
-
-    prefs = BettingPreferences(
-        gambler_id=gambler_id,
-        min_bet=Decimal("10"),
-        max_bet=Decimal("200"),
-        preferred_strategy="FIXED",
-        auto_play_enabled=False,
-        max_bets_per_session=10,
-    )
-
-    db.add(prefs)
-    db.commit()
-    db.close()
-
-    print(" User registered and activated")
-    return gambler_id
+    print("User registered successfully")
+    return user_id
 
 
-def login_user():
-    db = SessionLocal()
+def login():
     username = input("Enter username: ")
+    user_id = UserService.login(username)
 
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        db.close()
-        print(" User not found")
+    if not user_id:
+        print("User not found")
         return None
 
-    user.is_active = True
-    gambler_id = user.user_id
-
-    db.commit()
-    db.close()
-    print(" Logged in")
-    return gambler_id
+    print("Login successful")
+    return user_id
 
 
-def choose_strategy(gambler_id):
-    db = SessionLocal()
-
-    prefs = db.query(BettingPreferences).filter(
-        BettingPreferences.gambler_id == gambler_id
-    ).first()
-
-    if not prefs:
-        print(" Betting preferences not found")
-        db.close()
-        return
-
+def choose_strategy(user_id):
     print("\nChoose strategy:")
     print("1. FIXED")
     print("2. PERCENTAGE")
     print("3. MARTINGALE")
+    print("4. REVERSE_MARTINGALE")
 
     choice = input("Selection: ")
 
-    if choice == "1":
-        prefs.preferred_strategy = "FIXED"
-    elif choice == "2":
-        prefs.preferred_strategy = "PERCENTAGE"
-    elif choice == "3":
-        prefs.preferred_strategy = "MARTINGALE"
-    else:
+    mapping = {
+        "1": "FIXED",
+        "2": "PERCENTAGE",
+        "3": "MARTINGALE",
+        "4": "REVERSE_MARTINGALE"
+    }
+
+    strategy = mapping.get(choice)
+
+    if not strategy:
         print("Invalid choice")
+        return
 
-    db.commit()
-    db.close()
+    PreferenceService.change_strategy(user_id, strategy)
+    print("Strategy updated")
 
 
-def play_manual_round(gambler_id):
-    eligible, reason = EligibilityService.is_eligible_to_bet(gambler_id)
+def prompt_manual_bet(user_id):
+    user = UserRepository.get_by_id(user_id)
+    prefs = PreferenceService.get_preferences(user_id)
+
+    current_stake = Decimal(str(user["current_stake"]))
+    min_bet = Decimal(str(prefs["min_bet"]))
+    max_bet = Decimal(str(prefs["max_bet"]))
+    strategy = prefs["preferred_strategy"]
+
+    print(f"Current balance: {current_stake}")
+    print(f"Minimum bet: {min_bet}")
+    print(f"Maximum bet: {max_bet}")
+
+    if strategy == "PERCENTAGE":
+        print("Enter bet percentage instead of a fixed amount.")
+        prompt = "Bet percentage (1-100): "
+    else:
+        prompt = "Bet amount: "
+
+    while True:
+        raw_value = input(prompt)
+        try:
+            amount = BetAmountService.validate_manual_bet(user_id, raw_value)
+            return amount
+        except Exception as exc:
+            print(f"Invalid bet: {exc}")
+            continue
+
+
+def play_manual(user_id):
+    amount = prompt_manual_bet(user_id)
+
+    eligible, reason = EligibilityService.is_eligible_to_bet(user_id, requested_bet_amount=amount)
     if not eligible:
         print(f"Cannot bet: {reason}")
         return False
 
-    bet_amount = BetAmountService.calculate_bet_amount(gambler_id)
+    bet_id = BetService.place_bet(user_id, amount)
 
-    db = SessionLocal()
-    user = db.query(User).filter(User.user_id == gambler_id).first()
-    db.close()
-
-    bet_id = BetService.place_bet(user.username, bet_amount)
-
-    outcome = OutcomeService.determine_outcome(win_probability=0.5)
+    outcome = OutcomeService.determine_outcome(0.5)
     BetSettlementService.resolve_bet(bet_id, outcome.value)
 
-    db = SessionLocal()
-    user = db.query(User).filter(User.user_id == gambler_id).first()
-    db.close()
+    user = UserRepository.get_by_id(user_id)
 
-    print(f" Bet {bet_amount} → {outcome.value}")
-    print(f" Current balance: {user.current_stake}")
+    print(f"Bet: {amount} → {outcome.value}")
+    print(f"Balance: {user['current_stake']}")
 
     return True
 
 
 def main():
-    Base.metadata.create_all(bind=engine)
+    initialize_database()
 
-    print("\n Welcome to Gambling CLI ")
+    print("\n=== Gambling CLI ===")
     print("1. Register")
     print("2. Login")
 
     option = input("Choose option: ")
 
     if option == "1":
-        gambler_id = register_user()
+        user_id = register()
     elif option == "2":
-        gambler_id = login_user()
-        if not gambler_id:
+        user_id = login()
+        if not user_id:
             return
     else:
         return
 
-    choose_strategy(gambler_id)
+    choose_strategy(user_id)
 
     while True:
-        print("\n1. Play bet")
-        print("2. Start auto session")
+        print("\n1. Play manual bet")
+        print("2. Run auto session")
         print("3. Exit")
 
         action = input("Select: ")
 
         if action == "1":
-            if not play_manual_round(gambler_id):
+            if not play_manual(user_id):
                 break
+
         elif action == "2":
-            enable_autoplay(gambler_id)
-            result = BettingSessionService.run_session(gambler_id)
-            print("Session result:", result)
+            rounds_input = input("Enter number of auto-play rounds: ")
+            try:
+                rounds = int(rounds_input)
+                if rounds <= 0:
+                    raise ValueError()
+            except ValueError:
+                print("Invalid round count. Using 10 rounds.")
+                rounds = 10
+
+            result = SessionRunner.run(user_id, rounds=rounds)
+            print(result)
+
         elif action == "3":
-            print(" Goodbye")
+            print("Goodbye")
             break
+
         else:
             print("Invalid option")
 

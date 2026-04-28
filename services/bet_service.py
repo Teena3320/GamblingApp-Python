@@ -1,45 +1,44 @@
-
 from decimal import Decimal
-from config.database import SessionLocal
-from models.user import User
-from models.bet import Bet
+
+from repositories.user_repositories import UserRepository
+from repositories.bet_repository import BetRepository
+from repositories.stake_transaction_repository import StakeTransactionRepository
+from services.eligibility_service import EligibilityService
+from domain.transaction_type import TransactionType
 
 
 class BetService:
 
     @staticmethod
-    def place_bet(username: str, amount):
-        db = SessionLocal()
+    def place_bet(user_id, amount):
+        eligible, reason = EligibilityService.is_eligible_to_bet(user_id, requested_bet_amount=amount)
+        if not eligible:
+            raise ValueError(f"Cannot place bet: {reason}")
 
-        user = db.query(User).filter(User.username == username).first()
+        user = UserRepository.get_by_id(user_id)
+
         if not user:
-            db.close()
             raise ValueError("User not found")
 
-        if not user.is_active:
-            db.close()
-            raise ValueError("User is inactive")
-
+        current_stake = Decimal(str(user["current_stake"]))
         amount = Decimal(str(amount))
-        current_stake = Decimal(str(user.current_stake))
 
         if current_stake < amount:
-            db.close()
             raise ValueError("Insufficient balance")
 
-        user.current_stake = current_stake - amount
+        bet_id = BetRepository.create(user_id, amount)
 
-        bet = Bet(
-            user_id=user.user_id,
+        new_stake = current_stake - amount
+        UserRepository.update_stake(user_id, new_stake)
+
+        StakeTransactionRepository.create(
+            gambler_id=user_id,
+            transaction_type=TransactionType.BET_PLACED.value,
             amount=amount,
-            status="OPEN"
+            balance_before=current_stake,
+            balance_after=new_stake,
+            reference_id=bet_id,
+            description="Bet placed"
         )
 
-        db.add(bet)
-        db.commit()
-        db.refresh(bet)          
-
-        bet_id = bet.bet_id       
-        db.close()
-
-        return bet_id             
+        return bet_id
