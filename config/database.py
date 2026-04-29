@@ -90,7 +90,7 @@ def initialize_database():
         stmt = stmt.strip()
         if stmt:
             cursor.execute(stmt)
-            print(f"Executed: {stmt[:50]}...")
+            # print(f"Executed: {stmt[:50]}...")
 
     conn.commit()
     cursor.close()

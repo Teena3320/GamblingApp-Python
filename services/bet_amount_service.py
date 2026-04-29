@@ -49,11 +49,15 @@ class BetAmountService:
 
         strategy_type = BettingStrategyType(prefs["preferred_strategy"])
 
+        base_bet = Decimal(str(prefs["min_bet"]))
+
         strategy = BettingStrategyFactory.create(
             strategy_type,
             fixed_amount=prefs["min_bet"],
             percentage=Decimal("0.1"),
-            base_bet=prefs["min_bet"],
+            base_bet=base_bet,
+            max_bet=Decimal(str(prefs["max_bet"])) if strategy_type == BettingStrategyType.FIBONACCI else None,
+            increment=Decimal(str(prefs["min_bet"])),
         )
 
         current_stake = Decimal(str(user["current_stake"]))

@@ -19,17 +19,21 @@ class SessionRunner:
     def run(user_id, rounds=10):
         results = []
 
-        # 🔥 create strategy ONCE
         user = UserRepository.get_by_id(user_id)
         prefs = PreferenceRepository.get_by_user_id(user_id)
 
         strategy_type = BettingStrategyType(prefs["preferred_strategy"])
+        max_bet = Decimal(str(prefs["max_bet"]))
+
+        base_bet = Decimal(str(prefs["min_bet"]))
 
         strategy = BettingStrategyFactory.create(
             strategy_type,
             fixed_amount=prefs["min_bet"],
             percentage=Decimal("0.1"),
-            base_bet=prefs["min_bet"],
+            base_bet=base_bet,
+            max_bet=max_bet,
+            increment=Decimal(str(prefs["min_bet"])),
         )
 
         session_id = BettingSessionRepository.create_session(
@@ -65,7 +69,6 @@ class SessionRunner:
 
             BetSettlementService.resolve_bet(bet_id, outcome.value)
 
-            # 🔥 update strategy state
             if outcome.value == "WIN":
                 strategy.update_after_win()
             else:
